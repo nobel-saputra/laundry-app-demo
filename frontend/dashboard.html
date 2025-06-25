@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Laundry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 font-sans">
+    <nav class="bg-blue-600 p-4 text-white flex justify-between items-center">
+      <h1 class="text-xl font-bold">Laundry Dashboard</h1>
+      <div>
+        <a href="/customers" class="mr-4 hover:underline">Customers</a>
+        <a href="/transactions" class="mr-4 hover:underline">Transactions</a>
+        <a href="/reports" class="mr-4 hover:underline">Reports</a>
+        <button
+          id="logoutBtn"
+          class="bg-red-500 px-3 py-1 rounded hover:bg-red-600"
+        >
+          Logout
+        </button>
+      </div>
+    </nav>
+
+    <main id="app-content" class="container mx-auto p-6">
+      </main>
+
+    <script>
+      // Pastikan backendBaseUrl ini sesuai dengan konfigurasi Docker Compose Anda
+      const backendBaseUrl = "http://localhost:3000";
+
+      // --- Fungsi Umum & Login/Logout ---
+      if (!localStorage.getItem("loggedIn")) {
+        window.location.href = "/";
+      }
+
+      document.getElementById("logoutBtn").addEventListener("click", () => {
+        localStorage.removeItem("loggedIn");
+        localStorage.removeItem("userRole");
+        window.location.href = "/";
+      });
+
+      // --- Fungsi-fungsi untuk Halaman Dashboard Utama ---
+      async function fetchDashboardData() {
+        try {
+          const customersResponse = await fetch(
+            `${backendBaseUrl}/api/customers`
+          );
+          const customers = await customersResponse.json();
+          const totalCustomersElement = document.getElementById("totalCustomers");
+          if (totalCustomersElement) {
+              totalCustomersElement.textContent = customers.length;
+          }
+
+          const dailyReportResponse = await fetch(
+            `${backendBaseUrl}/api/reports/daily`
+          );
+          const dailyReport = await dailyReportResponse.json();
+          
+          const totalDailyTransactionsElement = document.getElementById("totalDailyTransactions");
+          if (totalDailyTransactionsElement) {
+            totalDailyTransactionsElement.textContent = dailyReport.total_transactions || 0;
+          }
+
+          const dailyRevenueElement = document.getElementById("dailyRevenue");
+          if (dailyRevenueElement) {
+            dailyRevenueElement.textContent = `Rp ${parseFloat(
+              dailyReport.total_daily_revenue || 0
+            ).toLocaleString("id-ID")}`;
+          }
+
+        } catch (error) {
+          console.error("Error fetching dashboard data:", error);
+          const totalCustomersElement = document.getElementById("totalCustomers");
+          if (totalCustomersElement) totalCustomersElement.textContent = "N/A";
+
+          const totalDailyTransactionsElement = document.getElementById("totalDailyTransactions");
+          if (totalDailyTransactionsElement) totalDailyTransactionsElement.textContent = "N/A";
+          
+          const dailyRevenueElement = document.getElementById("dailyRevenue");
+          if (dailyRevenueElement) dailyRevenueElement.textContent = "N/A";
+        }
+      }
+
+      // --- Fungsi-fungsi untuk Halaman Customer ---
+      async function showCustomersPage() {
+        const appContent = document.getElementById("app-content");
+        appContent.innerHTML = `
+            <h2 class="text-3xl font-bold mb-6">Kelola Customer</h2>
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h3 class="text-xl font-semibold mb-4">Input Customer Baru</h3>
+                <form id="customerForm">
+                    <div class="mb-4">
+                        <label for="name" class="block text-gray-700 text-sm font-bold mb-2">Nama Customer:</label>
+                        <input type="text" id="name" name="name" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="address" class="block text-gray-700 text-sm font-bold mb-2">Alamat:</label>
+                        <input type="text" id="address" name="address" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="phone" class="block text-gray-700 text-sm font-bold mb-2">Telepon:</label>
+                        <input type="text" id="phone" name="phone" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                    </div>
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">Tambah Customer</button>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded shadow-md">
+                <h3 class="text-xl font-semibold mb-4">Daftar Customer</h3>
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alamat</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Telepon</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customerList" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="5" class="px-6 py-4 whitespace-nowrap text-center">Memuat data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        document.getElementById("customerForm").addEventListener("submit", handleCustomerFormSubmit);
+        fetchCustomers();
+      }
+
+      async function handleCustomerFormSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+        const customerData = {
+          name: form.name.value,
+          address: form.address.value,
+          phone: form.phone.value,
+        };
+
+        try {
+          const response = await fetch(`${backendBaseUrl}/api/customers`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(customerData),
+          });
+
+          if (response.ok) {
+            alert("Customer berhasil ditambahkan!");
+            form.reset();
+            fetchCustomers();
+          } else {
+            const errorData = await response.json();
+            alert("Gagal menambahkan customer: " + (errorData.message || response.statusText));
+          }
+        } catch (error) {
+          console.error("Error submitting customer form:", error);
+          alert("Terjadi kesalahan saat menambahkan customer.");
+        }
+      }
+
+      async function fetchCustomers() {
+        try {
+          const response = await fetch(`${backendBaseUrl}/api/customers`);
+          const customers = await response.json();
+          const customerList = document.getElementById("customerList");
+          customerList.innerHTML = "";
+
+          if (customers.length === 0) {
+            customerList.innerHTML =
+              '<tr><td colspan="5" class="px-6 py-4 whitespace-nowrap text-center">Belum ada customer.</td></tr>';
+            return;
+          }
+
+          customers.forEach((customer) => {
+            const row = `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap">${customer.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${customer.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${customer.address}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${customer.phone}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onclick="editCustomer(${customer.id})" class="text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
+                        <button onclick="deleteCustomer(${customer.id})" class="text-red-600 hover:text-red-900">Hapus</button>
+                    </td>
+                </tr>
+            `;
+            customerList.insertAdjacentHTML("beforeend", row);
+          });
+        } catch (error) {
+          console.error("Error fetching customers:", error);
+          document.getElementById("customerList").innerHTML =
+            '<tr><td colspan="5" class="px-6 py-4 whitespace-nowrap text-center text-red-500">Gagal memuat customer.</td></tr>';
+        }
+      }
+
+      function editCustomer(id) {
+        alert("Fungsi Edit customer ID: " + id + " belum diimplementasikan.");
+        // Implementasi: Ambil data customer, isi form, lalu kirim PUT request ke backend
+      }
+
+      async function deleteCustomer(id) {
+        if (confirm("Anda yakin ingin menghapus customer ini?")) {
+            try {
+                const response = await fetch(`${backendBaseUrl}/api/customers/${id}`, {
+                    method: 'DELETE',
+                });
+
+                if (response.ok) {
+                    alert('Customer berhasil dihapus!');
+                    fetchCustomers();
+                } else {
+                    const errorData = await response.json();
+                    alert('Gagal menghapus customer: ' + (errorData.message || response.statusText));
+                }
+            } catch (error) {
+                console.error('Error deleting customer:', error);
+                alert('Terjadi kesalahan saat menghapus customer.');
+            }
+        }
+      }
+
+      // --- Fungsi-fungsi untuk Halaman Transaksi ---
+      // Anda perlu mengembangkan ini seperti showCustomersPage()
+      async function showTransactionsPage() {
+        const appContent = document.getElementById("app-content");
+        appContent.innerHTML = `
+            <h2 class="text-3xl font-bold mb-6">Kelola Transaksi</h2>
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h3 class="text-xl font-semibold mb-4">Input Transaksi Baru</h3>
+                <form id="transactionForm">
+                    <div class="mb-4">
+                        <label for="customerSelect" class="block text-gray-700 text-sm font-bold mb-2">Pilih Customer:</label>
+                        <select id="customerSelect" name="customer_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                            <option value="">Memuat Customers...</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="serviceType" class="block text-gray-700 text-sm font-bold mb-2">Jenis Layanan:</label>
+                        <select id="serviceType" name="service_type" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                            <option value="">Pilih Layanan</option>
+                            <option value="cuci-kering-lipat">Cuci Kering Lipat</option>
+                            <option value="cuci-setrika">Cuci Setrika</option>
+                            <option value="setrika-saja">Setrika Saja</option>
+                            <option value="cuci-karpet">Cuci Karpet</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="weight" class="block text-gray-700 text-sm font-bold mb-2">Berat (kg) / Jumlah:</label>
+                        <input type="number" id="weight" name="weight" step="0.1" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="Masukkan berat/jumlah" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="totalPrice" class="block text-gray-700 text-sm font-bold mb-2">Total Harga (Rp):</label>
+                        <input type="number" id="totalPrice" name="total_price" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="status" class="block text-gray-700 text-sm font-bold mb-2">Status:</label>
+                        <select id="status" name="status" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                            <option value="pending">Pending</option>
+                            <option value="process">Proses</option>
+                            <option value="ready">Siap Diambil</option>
+                            <option value="completed">Selesai</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">Tambah Transaksi</button>
+                </form>
+            </div>
+            <div class="bg-white p-6 rounded shadow-md">
+                <h3 class="text-xl font-semibold mb-4">Daftar Transaksi</h3>
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Layanan</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Berat/Jumlah</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionList" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="8" class="px-6 py-4 whitespace-nowrap text-center">Memuat data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        // Load customers into select input for transactions
+        await loadCustomersForTransactionForm();
+        document.getElementById("transactionForm").addEventListener("submit", handleTransactionFormSubmit);
+        fetchTransactions();
+      }
+
+      async function loadCustomersForTransactionForm() {
+        try {
+            const response = await fetch(`${backendBaseUrl}/api/customers`);
+            const customers = await response.json();
+            const customerSelect = document.getElementById('customerSelect');
+            customerSelect.innerHTML = '<option value="">Pilih Customer</option>'; // Reset options
+
+            customers.forEach(customer => {
+                const option = document.createElement('option');
+                option.value = customer.id;
+                option.textContent = customer.name;
+                customerSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error("Error loading customers for transaction form:", error);
+            const customerSelect = document.getElementById('customerSelect');
+            if (customerSelect) customerSelect.innerHTML = '<option value="">Gagal memuat customer</option>';
+        }
+      }
+
+      async function handleTransactionFormSubmit(event) {
+          event.preventDefault();
+          const form = event.target;
+          const transactionData = {
+              customer_id: form.customer_id.value,
+              service_type: form.service_type.value,
+              weight: parseFloat(form.weight.value),
+              total_price: parseFloat(form.total_price.value),
+              status: form.status.value,
+              // Tambahkan field lain yang relevan (misal: tanggal, user_id jika ada)
+          };
+
+          try {
+              const response = await fetch(`${backendBaseUrl}/api/transactions`, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(transactionData)
+              });
+
+              if (response.ok) {
+                  alert('Transaksi berhasil ditambahkan!');
+                  form.reset();
+                  fetchTransactions(); // Muat ulang daftar transaksi
+              } else {
+                  const errorData = await response.json();
+                  alert('Gagal menambahkan transaksi: ' + (errorData.message || response.statusText));
+              }
+          } catch (error) {
+              console.error('Error submitting transaction form:', error);
+              alert('Terjadi kesalahan saat menambahkan transaksi.');
+          }
+      }
+
+      async function fetchTransactions() {
+          try {
+              const response = await fetch(`${backendBaseUrl}/api/transactions`);
+              const transactions = await response.json();
+              const transactionList = document.getElementById('transactionList');
+              transactionList.innerHTML = ''; // Kosongkan daftar sebelumnya
+
+              if (transactions.length === 0) {
+                  transactionList.innerHTML = '<tr><td colspan="8" class="px-6 py-4 whitespace-nowrap text-center">Belum ada transaksi.</td></tr>';
+                  return;
+              }
+
+              transactions.forEach(transaction => {
+                  const row = `
+                      <tr>
+                          <td class="px-6 py-4 whitespace-nowrap">${transaction.id}</td>
+                          <td class="px-6 py-4 whitespace-nowrap">${transaction.customer_name || 'N/A'}</td> <td class="px-6 py-4 whitespace-nowrap">${transaction.service_type}</td>
+                          <td class="px-6 py-4 whitespace-nowrap">${transaction.weight || transaction.quantity}</td>
+                          <td class="px-6 py-4 whitespace-nowrap">Rp ${parseFloat(transaction.total_price).toLocaleString('id-ID')}</td>
+                          <td class="px-6 py-4 whitespace-nowrap">${transaction.status}</td>
+                          <td class="px-6 py-4 whitespace-nowrap">${new Date(transaction.created_at).toLocaleDateString()}</td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <button onclick="editTransaction(${transaction.id})" class="text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
+                              <button onclick="deleteTransaction(${transaction.id})" class="text-red-600 hover:text-red-900">Hapus</button>
+                          </td>
+                      </tr>
+                  `;
+                  transactionList.insertAdjacentHTML('beforeend', row);
+              });
+          } catch (error) {
+              console.error('Error fetching transactions:', error);
+              document.getElementById('transactionList').innerHTML = '<tr><td colspan="8" class="px-6 py-4 whitespace-nowrap text-center text-red-500">Gagal memuat transaksi.</td></tr>';
+          }
+      }
+
+      function editTransaction(id) {
+          alert('Fungsi Edit transaksi ID: ' + id + ' belum diimplementasikan.');
+      }
+
+      async function deleteTransaction(id) {
+          if (confirm('Anda yakin ingin menghapus transaksi ini?')) {
+              try {
+                  const response = await fetch(`${backendBaseUrl}/api/transactions/${id}`, {
+                      method: 'DELETE',
+                  });
+
+                  if (response.ok) {
+                      alert('Transaksi berhasil dihapus!');
+                      fetchTransactions();
+                  } else {
+                      const errorData = await response.json();
+                      alert('Gagal menghapus transaksi: ' + (errorData.message || response.statusText));
+                  }
+              } catch (error) {
+                  console.error('Error deleting transaction:', error);
+                  alert('Terjadi kesalahan saat menghapus transaksi.');
+              }
+          }
+      }
+
+      // --- Fungsi-fungsi untuk Halaman Laporan ---
+      // Anda perlu mengembangkan ini lebih lanjut sesuai kebutuhan laporan Anda
+      async function showReportsPage() {
+        const appContent = document.getElementById("app-content");
+        appContent.innerHTML = `
+            <h2 class="text-3xl font-bold mb-6">Laporan</h2>
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h3 class="text-xl font-semibold mb-4">Filter Laporan</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="startDate" class="block text-gray-700 text-sm font-bold mb-2">Dari Tanggal:</label>
+                        <input type="date" id="startDate" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    </div>
+                    <div>
+                        <label for="endDate" class="block text-gray-700 text-sm font-bold mb-2">Sampai Tanggal:</label>
+                        <input type="date" id="endDate" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    </div>
+                </div>
+                <button id="generateReportBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4">Generate Laporan</button>
+            </div>
+
+            <div class="bg-white p-6 rounded shadow-md">
+                <h3 class="text-xl font-semibold mb-4">Ringkasan Laporan</h3>
+                <p id="reportSummary">Pilih tanggal dan generate laporan.</p>
+                <table class="min-w-full divide-y divide-gray-200 mt-4">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jumlah Transaksi</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Pendapatan (Rp)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportDetailList" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="3" class="px-6 py-4 whitespace-nowrap text-center">Tidak ada data laporan.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('generateReportBtn').addEventListener('click', fetchReports);
+      }
+
+      async function fetchReports() {
+          const startDate = document.getElementById('startDate').value;
+          const endDate = document.getElementById('endDate').value;
+          
+          if (!startDate || !endDate) {
+              alert('Mohon pilih tanggal mulai dan tanggal akhir.');
+              return;
+          }
+
+          try {
+              const response = await fetch(`${backendBaseUrl}/api/reports?start_date=${startDate}&end_date=${endDate}`);
+              const reportData = await response.json(); // Asumsi backend memberikan data laporan yang terstruktur
+
+              const reportSummary = document.getElementById('reportSummary');
+              const reportDetailList = document.getElementById('reportDetailList');
+
+              reportDetailList.innerHTML = ''; // Clear previous data
+
+              if (reportData.length === 0) {
+                  reportSummary.textContent = 'Tidak ada transaksi dalam periode ini.';
+                  reportDetailList.innerHTML = '<tr><td colspan="3" class="px-6 py-4 whitespace-nowrap text-center">Tidak ada data.</td></tr>';
+                  return;
+              }
+
+              let totalOverallRevenue = 0;
+              let totalOverallTransactions = 0;
+
+              reportData.forEach(item => {
+                  const row = `
+                      <tr>
+                          <td class="px-6 py-4 whitespace-nowrap">${new Date(item.date).toLocaleDateString()}</td>
+                          <td class="px-6 py-4 whitespace-nowrap">${item.total_transactions}</td>
+                          <td class="px-6 py-4 whitespace-nowrap">Rp ${parseFloat(item.total_revenue).toLocaleString('id-ID')}</td>
+                      </tr>
+                  `;
+                  reportDetailList.insertAdjacentHTML('beforeend', row);
+                  totalOverallRevenue += item.total_revenue;
+                  totalOverallTransactions += item.total_transactions;
+              });
+
+              reportSummary.textContent = `Total Transaksi: ${totalOverallTransactions}, Total Pendapatan: Rp ${totalOverallRevenue.toLocaleString('id-ID')}`;
+
+          } catch (error) {
+              console.error('Error fetching reports:', error);
+              document.getElementById('reportSummary').textContent = 'Gagal memuat laporan.';
+              document.getElementById('reportDetailList').innerHTML = '<tr><td colspan="3" class="px-6 py-4 whitespace-nowrap text-center text-red-500">Gagal memuat laporan.</td></tr>';
+          }
+      }
+
+      // --- Routing Utama (Pengelola Tampilan Halaman) ---
+      function loadContent(path) {
+        const appContent = document.getElementById("app-content");
+        appContent.innerHTML = ''; 
+
+        switch (path) {
+          case "/":
+            appContent.innerHTML = `
+                <h2 class="text-3xl font-bold mb-6">Selamat Datang di Sistem Laundry Anda!</h2>
+                <p class="text-lg">Silakan gunakan menu di atas untuk mengelola operasional.</p>
+                <div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded shadow-md text-center">
+                        <h3 class="text-xl font-semibold mb-2">Total Customer</h3>
+                        <p class="text-4xl text-blue-600 font-bold" id="totalCustomers">...</p>
+                        <a href="/customers" class="text-blue-500 hover:underline mt-4 block">Lihat Detail</a>
+                    </div>
+                    <div class="bg-white p-6 rounded shadow-md text-center">
+                        <h3 class="text-xl font-semibold mb-2">Transaksi Hari Ini</h3>
+                        <p class="text-4xl text-green-600 font-bold" id="totalDailyTransactions">...</p>
+                        <a href="/transactions" class="text-blue-500 hover:underline mt-4 block">Lihat Detail</a>
+                    </div>
+                    <div class="bg-white p-6 rounded shadow-md text-center">
+                        <h3 class="text-xl font-semibold mb-2">Pendapatan Hari Ini</h3>
+                        <p class="text-4xl text-purple-600 font-bold" id="dailyRevenue">...</p>
+                        <a href="/reports" class="text-blue-500 hover:underline mt-4 block">Lihat Detail</a>
+                    </div>
+                </div>
+            `;
+            fetchDashboardData();
+            break;
+          case "/customers":
+            showCustomersPage();
+            break;
+          case "/transactions":
+            showTransactionsPage();
+            break;
+          case "/reports":
+            showReportsPage();
+            break;
+          default:
+            appContent.innerHTML = `
+                <h2 class="text-3xl font-bold mb-6">Halaman Dashboard</h2>
+            `;
+            break;
+        }
+      }
+
+      // Tangani klik link navigasi (agar tidak me-reload halaman)
+      document.querySelectorAll("nav a, main a").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          if (e.target.tagName === 'A' && e.target.getAttribute('href').startsWith('/')) {
+              e.preventDefault();
+              const path = e.target.getAttribute("href");
+              history.pushState({}, "", path);
+              loadContent(path);
+          }
+        });
+      });
+
+      // Tangani saat pengguna menggunakan tombol back/forward browser
+      window.addEventListener("popstate", () => {
+        loadContent(window.location.pathname);
+      });
+
+      // Muat konten awal saat halaman pertama kali dimuat
+      loadContent(window.location.pathname);
+    </script>
+  </body>
+</html>

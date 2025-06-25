@@ -1,0 +1,52 @@
+# docker-compose.yml
+version: '3.8' # (opsional, bisa dihapus seperti saran sebelumnya, tapi kalau ada, biarkan saja dulu)
+
+services:  # <- Ini harus paling kiri (tanpa indentasi)
+  db:      # <- Ini harus indentasi 2 spasi dari 'services:'
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: laundrydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d laundrydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend: # <- Ini harus indentasi 2 spasi dari 'services:'
+    build: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: laundrydb
+      DB_HOST: db
+      DB_PORT: 5432
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend: # <- Ini harus indentasi 2 spasi dari 'services:'
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  mailhog: # <- PASTIKAN INI JUGA INDENTASI 2 SPASI, SEJAJAR DENGAN 'db:', 'backend:', dan 'frontend:'
+    image: mailhog/mailhog:latest
+    logging:
+      driver: 'none'
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes: # <- Ini juga harus paling kiri, sejajar dengan 'services:'
+  db_data: {}
